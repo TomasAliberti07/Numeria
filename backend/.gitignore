@@ -1,0 +1,28 @@
+# Archivos de entorno y secretos
+.env
+.env.local
+.env.*.local
+
+# Entornos virtuales de Python
+venv/
+env/
+ENV/
+.venv/
+
+# Archivos compilados y caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de datos local (si usás SQLite)
+*.db
+*.sqlite3
+
+# Archivos de IDEs / Editor
+.vscode/
+.idea/
+
+# Archivos de Node/Frontend (por si están en el mismo repo)
+node_modules/
+dist/
+build/
