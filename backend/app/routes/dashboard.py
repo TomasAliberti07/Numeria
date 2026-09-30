@@ -1,30 +1,12 @@
 from fastapi import APIRouter
-from app.database import get_connection
+from app.analytics import obtener_resumen_stock, obtener_productos_stock_bajo, obtener_reporte_ventas
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
-@router.get("/stats")
-def obtener_metricas():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM productos")
-    total_productos = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM productos WHERE stock_actual <= stock_minimo")
-    stock_critico = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COALESCE(SUM(total), 0) FROM ventas WHERE fecha >= datetime('now', '-7 days')")
-    ventas_recientes = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM proveedores")
-    total_proveedores = cursor.fetchone()[0]
-
-    conn.close()
-
+@router.get("/summary")
+def obtener_resumen_dashboard():
     return {
-        "total_productos": total_productos,
-        "stock_critico": stock_critico,
-        "ventas_recientes": ventas_recientes,
-        "total_proveedores": total_proveedores
+        "stock": obtener_resumen_stock(),
+        "ventas": obtener_reporte_ventas(),
+        "productos_criticos": obtener_productos_stock_bajo(umbral=5)
     }

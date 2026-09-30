@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import Optional
 from app.database import get_connection
 
-router = APIRouter(prefix="/productos", tags=["Productos"])
+# Agregamos /api/ para que coincida con Axios y el .env del frontend
+router = APIRouter(prefix="/api/productos", tags=["Productos"])
 
 class ProductoCreate(BaseModel):
     nombre: str
@@ -14,7 +15,8 @@ class ProductoCreate(BaseModel):
     stock_minimo: int = 5
     proveedor_id: Optional[int] = None
 
-@router.get("/")
+# Quitamos las barras inclinadas extra para evitar problemas de Trailing Slash
+@router.get("")
 def listar_productos():
     conn = get_connection()
     cursor = conn.cursor()
@@ -27,7 +29,7 @@ def listar_productos():
     conn.close()
     return productos
 
-@router.post("/")
+@router.post("")
 def crear_producto(prod: ProductoCreate):
     conn = get_connection()
     cursor = conn.cursor()

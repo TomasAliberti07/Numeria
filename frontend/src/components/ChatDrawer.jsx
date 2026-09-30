@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Send, Loader2 } from 'lucide-react';
+import axios from 'axios'; // O tu apiClient importado si tenés una instancia creada
 
 export const ChatDrawer = ({ isOpen, onClose }) => {
   const [messages, setMessages] = useState([
@@ -10,44 +11,46 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
     },
   ]);
   const [input, setInput] = useState('');
-  const [isThinking, setIsThinking] = useState(false); // Estado para controlar la respuesta activa
+  const [isThinking, setIsThinking] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     const cleanInput = input.trim();
     if (!cleanInput || isThinking) return;
 
+    // 1. Agregar el mensaje del usuario al chat
     const userMsg = { id: Date.now(), sender: 'user', text: cleanInput };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    setIsThinking(true); // Bloqueamos la entrada y el botón
+    setIsThinking(true);
 
-    // Simulación de procesamiento de Numerito (o llamado real a la API)
-    setTimeout(() => {
-      let botResponse = 'Estoy analizando tu consulta en el inventario...';
+    try {
+      // 2. Llamar a la API de FastAPI (usando la variable de entorno o la URL local)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+     const response = await axios.post(`${apiUrl}/chat`, { message: cleanInput });
 
-      const lowerText = cleanInput.toLowerCase();
-      if (
-        lowerText.includes('ella me quiere') || 
-        lowerText.includes('me ama') || 
-        lowerText.includes('novia') ||
-        lowerText.includes('amor')
-      ) {
-        botResponse = 'Flaco soy un agente para negocios, no de tu situación sentimental, pregúntame cosas del negocio';
-      }
+      // 3. Agregar la respuesta real de Gemini / Numerito
+      const botMsg = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: response.data.response || response.data.respuesta || 'Sin respuesta del servidor.',
+      };
+      setMessages((prev) => [...prev, botMsg]);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          sender: 'bot',
-          text: botResponse,
-        },
-      ]);
-      setIsThinking(false); // Liberamos el botón cuando ya respondió
-    }, 800);
+    } catch (error) {
+      console.error('Error al conectar con Numerito:', error);
+      // Mensaje de fallback en caso de error
+      const errorMsg = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: 'Ocurrió un error al consultar a Numerito. Por favor, verifica que el backend esté corriendo.',
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   return (

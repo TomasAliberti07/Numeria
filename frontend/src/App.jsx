@@ -1,30 +1,68 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { ChatDrawer } from './components/ChatDrawer';
 import { ProductosTable } from './components/productos/ProductosTable';
+import { AgregarProducto } from './components/productos/AgregarProducto'; // 👈 Importamos el modal de producto
 import { ProveedoresList } from './components/proveedores/ProveedoresList';
+import { getDashboardSummary } from './api/dashboard';
+import { VentaTable } from './components/ventas/VentaTable';
+import { RegistrarVentaModal } from './components/ventas/RegistrarVentaModal';
 import { 
   Package, 
   TrendingUp, 
   Users, 
   AlertTriangle, 
-  ArrowUpRight, 
   Sparkles, 
   LayoutDashboard, 
   ShoppingCart, 
   Truck, 
-  Bot 
+  Bot,
+  RefreshCw 
 } from 'lucide-react';
-
-const PRODUCTOS_MOCK = [
-  { id: 1, nombre: 'Auriculares Bluetooth', categoria: 'Audio', stock: 2, precioCompra: 18, precioVenta: 35, proveedor: 'TechSupply Co.' },
-  { id: 2, nombre: 'Mouse Inalámbrico', categoria: 'Periféricos', stock: 5, precioCompra: 10, precioVenta: 22, proveedor: 'Insumos Express' },
-  { id: 3, nombre: 'Monitor 24 FHD', categoria: 'Monitores', stock: 8, precioCompra: 110, precioVenta: 180, proveedor: 'Global Import S.A.' },
-  { id: 4, nombre: 'Teclado Mecánico RGB', categoria: 'Periféricos', stock: 24, precioCompra: 45, precioVenta: 85, proveedor: 'TechSupply Co.' },
-];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Estados para Modales
+  const [showVentaModal, setShowVentaModal] = useState(false);
+  const [showProductoModal, setShowProductoModal] = useState(false); // 👈 Estado para modal de producto
+  const [productos, setProductos] = useState([]);
+
+  // Estados del Dashboard
+  const [metrics, setMetrics] = useState({
+    stock: { total_productos: 0, unidades_totales: 0, valor_total_inventario: 0 },
+    ventas: { total_ingresos: 0, unidades_vendidas: 0, producto_mas_vendido: 'N/A', cantidad_transacciones: 0 },
+    productos_criticos: []
+  });
+  const [loadingMetrics, setLoadingMetrics] = useState(true);
+
+  const cargarMetricasDashboard = async () => {
+    try {
+      setLoadingMetrics(true);
+      const data = await getDashboardSummary();
+      setMetrics(data);
+    } catch (error) {
+      console.error("Error al cargar métricas del dashboard:", error);
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  const cargarProductos = async () => {
+    try {
+      const apiUrl = import.meta.env?.VITE_API_URL || 'http://127.0.0.1:8000/api';
+      const res = await axios.get(`${apiUrl}/productos`);
+      setProductos(res.data);
+    } catch (error) {
+      console.error("Error al cargar productos para el selector:", error);
+    }
+  };
+
+  useEffect(() => {
+    cargarMetricasDashboard();
+    cargarProductos();
+  }, []);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -125,7 +163,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Métricas rápidas */}
+              {/* Métricas Rápidas */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -134,11 +172,13 @@ export default function App() {
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 uppercase tracking-wider">Productos Totales</p>
-                      <h3 className="text-2xl font-bold">4 Ítems</h3>
+                      <h3 className="text-2xl font-bold font-mono">
+                        {loadingMetrics ? '...' : `${metrics.stock?.total_productos || 0} Ítems`}
+                      </h3>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                    3 Críticos
+                    {metrics.productos_criticos?.length || 0} Críticos
                   </span>
                 </div>
 
@@ -148,12 +188,14 @@ export default function App() {
                       <TrendingUp className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400 uppercase tracking-wider">Ventas Recientes</p>
-                      <h3 className="text-2xl font-bold">$237.00</h3>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Ventas Acumuladas</p>
+                      <h3 className="text-2xl font-bold font-mono">
+                        {loadingMetrics ? '...' : `$${metrics.ventas?.total_ingresos?.toLocaleString() || 0}`}
+                      </h3>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-0.5">
-                    +12% <ArrowUpRight className="w-3 h-3" />
+                    {metrics.ventas?.cantidad_transacciones || 0} Op.
                   </span>
                 </div>
 
@@ -163,22 +205,28 @@ export default function App() {
                       <Users className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400 uppercase tracking-wider">Proveedores</p>
-                      <h3 className="text-2xl font-bold">3 Activos</h3>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Valor Inventario</p>
+                      <h3 className="text-2xl font-bold font-mono">
+                        {loadingMetrics ? '...' : `$${metrics.stock?.valor_total_inventario?.toLocaleString() || 0}`}
+                      </h3>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
-                    100% Calificados
-                  </span>
+                  <button 
+                    onClick={cargarMetricasDashboard}
+                    className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition"
+                    title="Actualizar métricas"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingMetrics ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
               </div>
 
-              {/* Tabla Resumen de Inventario */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              {/* Tabla Resumen */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
                 <div className="p-6 border-b border-slate-800 flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-bold text-slate-100">Estado del Inventario</h2>
-                    <p className="text-xs text-slate-400">Resumen detallado de existencias y precios de venta</p>
+                    <h2 className="text-lg font-bold text-slate-100">Productos con Stock Crítico</h2>
+                    <p className="text-xs text-slate-400">Listado de ítems con existencias por debajo o al nivel del umbral mínimo</p>
                   </div>
                 </div>
 
@@ -186,34 +234,44 @@ export default function App() {
                   <table className="w-full text-left text-sm text-slate-300">
                     <thead className="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
                       <tr>
+                        <th className="px-6 py-3.5">ID</th>
                         <th className="px-6 py-3.5">Producto</th>
-                        <th className="px-6 py-3.5">Categoría</th>
-                        <th className="px-6 py-3.5">Stock</th>
+                        <th className="px-6 py-3.5">Stock Actual</th>
+                        <th className="px-6 py-3.5">Stock Mínimo</th>
                         <th className="px-6 py-3.5">Precio Venta</th>
                         <th className="px-6 py-3.5">Proveedor</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
-                      {PRODUCTOS_MOCK.map((prod) => (
-                        <tr key={prod.id} className="hover:bg-slate-800/40 transition-colors">
-                          <td className="px-6 py-4 font-medium text-slate-100">{prod.nombre}</td>
-                          <td className="px-6 py-4 text-slate-400">{prod.categoria}</td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                              prod.stock <= 5 
-                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-                                : prod.stock <= 10 
-                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            }`}>
-                              {prod.stock <= 5 && <AlertTriangle className="w-3 h-3" />}
-                              {prod.stock} unidades
-                            </span>
+                      {loadingMetrics ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-slate-500 font-mono text-xs">
+                            Cargando productos desde la base de datos...
                           </td>
-                          <td className="px-6 py-4 text-slate-200">${prod.precioVenta}</td>
-                          <td className="px-6 py-4 text-slate-400">{prod.proveedor}</td>
                         </tr>
-                      ))}
+                      ) : metrics.productos_criticos?.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                            No hay productos en estado crítico actualmente. ¡Stock óptimo!
+                          </td>
+                        </tr>
+                      ) : (
+                        metrics.productos_criticos.map((prod) => (
+                          <tr key={prod.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="px-6 py-4 font-mono text-slate-500">#{prod.id}</td>
+                            <td className="px-6 py-4 font-medium text-slate-100">{prod.nombre}</td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                <AlertTriangle className="w-3 h-3" />
+                                {prod.stock_actual} unidades
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-mono text-slate-400">{prod.stock_minimo} u.</td>
+                            <td className="px-6 py-4 font-mono text-emerald-400">${prod.precio_venta?.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-slate-400">{prod.proveedor || 'N/A'}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -221,15 +279,35 @@ export default function App() {
             </>
           )}
 
+          {/* 1. PRODUCTOS CON MODAL CONECTADO */}
           {activeTab === 'productos' && (
-            <ProductosTable onOpenModal={() => {}} />
+            <>
+              <ProductosTable onOpenModal={() => setShowProductoModal(true)} />
+              <AgregarProducto
+                isOpen={showProductoModal}
+                onClose={() => setShowProductoModal(false)}
+                onProductoAgregado={() => {
+                  cargarProductos();
+                  cargarMetricasDashboard();
+                }}
+              />
+            </>
           )}
 
+          {/* 2. VENTAS CON MODAL CONECTADO */}
           {activeTab === 'ventas' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-xl font-bold mb-2">Histórico de Ventas</h2>
-              <p className="text-slate-400 text-sm">Próximamente registro filtrable de transacciones.</p>
-            </div>
+            <>
+              <VentaTable onOpenModal={() => setShowVentaModal(true)} />
+              <RegistrarVentaModal
+                isOpen={showVentaModal}
+                onClose={() => setShowVentaModal(false)}
+                productos={productos}
+                onVentaExitosa={() => {
+                  cargarMetricasDashboard();
+                  cargarProductos();
+                }}
+              />
+            </>
           )}
 
           {activeTab === 'proveedores' && (
@@ -238,7 +316,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Drawer desplegable para el Chat con Numerito */}
+      {/* Drawer desplegable Chat */}
       <ChatDrawer isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   );

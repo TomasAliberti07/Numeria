@@ -1,23 +1,26 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Optional
+from app.database import get_connection
 
 router = APIRouter(prefix="/api/ventas", tags=["Ventas"])
 
-# Esquema para recibir el payload del registro de venta desde el frontend
-class VentaSchema(BaseModel):
+class VentaCreate(BaseModel):
     producto_id: int
     cantidad: int
-    precio_total: float | None = None
+    precio_unitario: float
+    fecha: Optional[str] = None
 
 @router.get("")
 def listar_ventas():
-    # Consulta de ventas realizadas
-    return []
-
-@router.post("")
-def registrar_venta(venta: VentaSchema):
-    # Procesa la venta y actualiza el stock correspondiente
-    if venta.cantidad <= 0:
-        raise HTTPException(status_code=400, detail="La cantidad debe ser mayor a 0")
-    
-    return {"mensaje": "Venta registrada con éxito", "data": venta}
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT v.*, p.nombre as producto_nombre, p.categoria 
+        FROM ventas v
+        LEFT JOIN productos p ON v.producto_id = p.id
+        ORDER BY v.fecha DESC
+    """)
+    ventas = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return ventas

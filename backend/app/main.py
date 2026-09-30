@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.database import init_db
 from app.analytics import obtener_resumen_stock, obtener_reporte_ventas
 from app.agent import responder_consulta
-from app.routes import productos, dashboard, proveedores, ventas
+from app.routes import productos, dashboard, proveedores, ventas, chat
 
 # Definir el evento Lifespan moderno
 @asynccontextmanager
@@ -31,3 +31,4 @@ app.include_router(productos.router)
 app.include_router(dashboard.router)
 app.include_router(proveedores.router)
 app.include_router(ventas.router)
+app.include_router(chat.router)
