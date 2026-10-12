@@ -36,3 +36,39 @@ def crear_proveedor(prov: ProveedorSchema):
     prov_id = cursor.lastrowid
     conn.close()
     return {"id": prov_id, "mensaje": "Proveedor creado con éxito"}
+
+@router.put("/{proveedor_id}")
+def actualizar_proveedor(proveedor_id: int, prov: ProveedorSchema):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Verificar si existe el proveedor
+    cursor.execute("SELECT id FROM proveedores WHERE id = ?", (proveedor_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+
+    cursor.execute("""
+        UPDATE proveedores 
+        SET nombre = ?, contacto = ?, telefono = ?, email = ?, calificacion_calidad = ?
+        WHERE id = ?
+    """, (prov.nombre, prov.contacto, prov.telefono, prov.email, prov.calificacion_calidad, proveedor_id))
+    
+    conn.commit()
+    conn.close()
+    return {"mensaje": "Proveedor actualizado con éxito"}
+
+@router.delete("/{proveedor_id}")
+def eliminar_proveedor(proveedor_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM proveedores WHERE id = ?", (proveedor_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+
+    cursor.execute("DELETE FROM proveedores WHERE id = ?", (proveedor_id,))
+    conn.commit()
+    conn.close()
+    return {"mensaje": "Proveedor eliminado con éxito"}
