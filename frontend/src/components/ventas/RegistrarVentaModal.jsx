@@ -6,6 +6,7 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
   const [productoId, setProductoId] = useState('');
   const [cantidad, setCantidad] = useState(1);
   const [precioUnitario, setPrecioUnitario] = useState(0);
+  const [stockSeleccionado, setStockSeleccionado] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,6 +18,9 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
     const prod = productos.find((p) => p.id === parseInt(id));
     if (prod) {
       setPrecioUnitario(prod.precio_venta || prod.precio || 0);
+      setStockSeleccionado(prod.stock_actual ?? prod.stock ?? 0);
+    } else {
+      setStockSeleccionado(null);
     }
   };
 
@@ -31,10 +35,24 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
       return;
     }
 
+    const prod = productos.find((p) => p.id === parseInt(productoId));
+    if (!prod) {
+      setError('El producto seleccionado no es válido');
+      return;
+    }
+
+    // Validar stock si lo deseas
+    const stockActual = prod.stock_actual ?? prod.stock ?? 0;
+    if (parseInt(cantidad) > stockActual) {
+      setError(`Stock insuficiente. Solo hay ${stockActual} unidades disponibles.`);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await registrarVenta({
         producto_id: parseInt(productoId),
+        producto: prod.nombre, // 👈 Enviamos el nombre requerido por la base de datos
         cantidad: parseInt(cantidad),
         precio_unitario: parseFloat(precioUnitario),
       });
@@ -46,6 +64,9 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
       setSubmitting(false);
     }
   };
+
+  // Clase utilitaria para quitar flechitas de inputs numéricos y estilizar
+  const inputNumberStyle = "w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 transition font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
@@ -101,12 +122,21 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
               <input
                 type="number"
                 min="1"
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 transition font-mono"
+                value={cantidad === 0 ? '' : cantidad}
+                onChange={(e) => setCantidad(e.target.value === '' ? '' : Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                placeholder="1"
+                className={inputNumberStyle}
                 required
               />
+              {/* Stock disponible visible debajo del input */}
+              {stockSeleccionado !== null && (
+                <span className="block text-[11px] text-slate-500 mt-1 font-mono">
+                  Disponible: {stockSeleccionado} u.
+                </span>
+              )}
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                 Precio Unit. ($)
@@ -114,9 +144,11 @@ export const RegistrarVentaModal = ({ isOpen, onClose, productos = [], onVentaEx
               <input
                 type="number"
                 step="0.01"
-                value={precioUnitario}
-                onChange={(e) => setPrecioUnitario(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 transition font-mono"
+                value={precioUnitario === 0 ? '' : precioUnitario}
+                onChange={(e) => setPrecioUnitario(e.target.value === '' ? '' : Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                placeholder="0.00"
+                className={inputNumberStyle}
                 required
               />
             </div>
