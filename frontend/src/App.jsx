@@ -27,6 +27,8 @@ export default function App() {
   // Estados para Modales
   const [showVentaModal, setShowVentaModal] = useState(false);
   const [showProductoModal, setShowProductoModal] = useState(false); // 👈 Estado para modal de producto
+  const [productoAEditar, setProductoAEditar] = useState(null);
+  const [productosRefreshToken, setProductosRefreshToken] = useState(0);
   const [productos, setProductos] = useState([]);
 
   // Estados del Dashboard
@@ -282,11 +284,26 @@ export default function App() {
           {/* 1. PRODUCTOS CON MODAL CONECTADO */}
           {activeTab === 'productos' && (
             <>
-              <ProductosTable onOpenModal={() => setShowProductoModal(true)} />
+              <ProductosTable
+                refreshToken={productosRefreshToken}
+                onOpenModal={() => {
+                  setProductoAEditar(null);
+                  setShowProductoModal(true);
+                }}
+                onEditProducto={(producto) => {
+                  setProductoAEditar(producto);
+                  setShowProductoModal(true);
+                }}
+              />
               <AgregarProducto
                 isOpen={showProductoModal}
-                onClose={() => setShowProductoModal(false)}
+                producto={productoAEditar}
+                onClose={() => {
+                  setShowProductoModal(false);
+                  setProductoAEditar(null);
+                }}
                 onProductoAgregado={() => {
+                  setProductosRefreshToken((token) => token + 1);
                   cargarProductos();
                   cargarMetricasDashboard();
                 }}

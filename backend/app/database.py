@@ -25,6 +25,7 @@ def init_db():
         );
     """)
 
+    # Incluimos is_active en la creación para bases de datos nuevas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS productos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,9 +36,17 @@ def init_db():
             precio_compra REAL DEFAULT 0.0,
             precio_venta REAL DEFAULT 0.0,
             proveedor_id INTEGER,
+            is_active INTEGER DEFAULT 1,
             FOREIGN KEY (proveedor_id) REFERENCES proveedores (id)
         );
     """)
+
+    # Migración: Intentamos agregar la columna si la base de datos ya existía previamente
+    try:
+        cursor.execute("ALTER TABLE productos ADD COLUMN is_active INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        # Si la columna ya existe, SQLite lanza este error y simplemente lo ignoramos
+        pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ventas (
@@ -57,4 +66,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print(" Tablas creadas correctamente en numeria.db")
+    print("Tablas inicializadas y migraciones aplicadas correctamente en numeria.db")

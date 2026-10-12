@@ -1,24 +1,55 @@
 import React, { useEffect, useState } from 'react';
-import { getProductos } from '../../api/productos';
-import { Plus, RefreshCw, Package } from 'lucide-react';
+import { getProductos, deleteProducto } from '../../api/productos'; // Asegúrate de tener deleteProducto en api/productos
+import { Plus, Package, Search, Edit2, Trash2 } from 'lucide-react';
 
-export const ProductosTable = ({ onOpenModal }) => {
+export const ProductosTable = ({ onOpenModal, onEditProducto, refreshToken }) => {
   const [productos, setProductos] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
   const cargarProductos = () => {
     setLoading(true);
     getProductos()
-      .then(setProductos)
+      .then((data) => {
+        // Filtrar opcionalmente si solo deseas ver activos si usas borrado lógico
+        const productosActivos = Array.isArray(data) 
+          ? data.filter((p) => p.is_active !== false) 
+          : [];
+        setProductos(productosActivos);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     cargarProductos();
-  }, []);
+  }, [refreshToken]);
 
-  // Función para determinar la etiqueta y estilos dinámicos del estado
+  // Borrado Lógico
+  const handleEliminar = async (id, nombre) => {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar "${nombre}"?`)) {
+      try {
+        if (typeof deleteProducto === 'function') {
+          await deleteProducto(id);
+        }
+        // Refresco automático eliminando el ítem del estado local
+        setProductos((prev) => prev.filter((p) => p.id !== id));
+      } catch (error) {
+        console.error('Error al eliminar el producto:', error);
+        alert('No se pudo eliminar el producto.');
+      }
+    }
+  };
+
+  // Filtrado reactivo en el frontend por Nombre o Categoría
+  const productosFiltrados = productos.filter((prod) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      prod.nombre?.toLowerCase().includes(term) ||
+      prod.categoria?.toLowerCase().includes(term)
+    );
+  });
+
   const obtenerBadgeEstado = (stockActual, stockMinimo) => {
     if (stockActual === 0) {
       return { label: 'Agotado', style: 'bg-red-500/10 text-red-400 border-red-500/20' };
@@ -29,33 +60,32 @@ export const ProductosTable = ({ onOpenModal }) => {
     return { label: 'Óptimo', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
   };
 
-  if (loading) {
-    return (
-      <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 text-center text-slate-400 font-mono text-sm">
-        Cargando inventario de productos...
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl">
-      {/* Encabezado y Botón de Acción */}
-      <div className="flex justify-between items-center mb-5">
+    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+      {/* Encabezado y Barra de Acciones */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Package className="w-5 h-5 text-cyan-400" />
           <h2 className="text-xl font-bold text-slate-100">Gestión de Productos</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={cargarProductos}
-            className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition"
-            title="Recargar inventario"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* Barra de Búsqueda */}
+          <div className="relative flex-1 md:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar producto o categoría..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-950/60 border border-slate-800 focus:border-cyan-500/50 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none transition"
+            />
+          </div>
+
+          {/* Botón de Nuevo Producto */}
           <button
             onClick={onOpenModal}
-            className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-xl text-sm transition shadow-lg shadow-cyan-500/10"
+            className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-xl text-sm transition shadow-lg shadow-cyan-500/10 shrink-0"
           >
             <Plus className="w-4 h-4" /> Nuevo Producto
           </button>
@@ -73,17 +103,24 @@ export const ProductosTable = ({ onOpenModal }) => {
               <th className="p-3">P. Venta</th>
               <th className="p-3">Stock</th>
               <th className="p-3">Estado</th>
+              <th className="p-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {productos.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-slate-500">
-                  No hay productos registrados en el inventario.
+                <td colSpan={7} className="p-8 text-center text-slate-500 font-mono text-sm">
+                  Cargando inventario de productos...
+                </td>
+              </tr>
+            ) : productosFiltrados.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-slate-500">
+                  {searchTerm ? 'No se encontraron coincidencias.' : 'No hay productos registrados en el inventario.'}
                 </td>
               </tr>
             ) : (
-              productos.map((prod) => {
+              productosFiltrados.map((prod) => {
                 const badge = obtenerBadgeEstado(prod.stock_actual, prod.stock_minimo);
                 return (
                   <tr key={prod.id} className="hover:bg-slate-800/40 transition-colors">
@@ -98,6 +135,24 @@ export const ProductosTable = ({ onOpenModal }) => {
                       <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${badge.style}`}>
                         {badge.label}
                       </span>
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => onEditProducto && onEditProducto(prod)}
+                          className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition"
+                          title="Editar producto"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEliminar(prod.id, prod.nombre)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition"
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
