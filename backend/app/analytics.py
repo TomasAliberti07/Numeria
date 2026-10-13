@@ -19,7 +19,6 @@ def obtener_resumen_stock() -> dict:
     if not row:
         return {"total_productos": 0, "unidades_totales": 0, "valor_total_inventario": 0}
 
-    # Compatibilidad garantizada tanto si row es Row como si es Tupla
     if hasattr(row, 'keys'):
         return dict(row)
     
@@ -30,8 +29,7 @@ def obtener_resumen_stock() -> dict:
     }
 
 def obtener_productos_stock_bajo(umbral: int = 5) -> list:
-    """Filtra y devuelve la lista de productos con stock crítico (menor o igual al umbral especificado)."""
-    # Forzar conversión a entero por si Gemini pasa el umbral como string o float
+    """Filtra y devuelve la lista de productos con stock crítico."""
     try:
         umbral_int = int(umbral)
     except (ValueError, TypeError):
@@ -55,11 +53,9 @@ def obtener_productos_stock_bajo(umbral: int = 5) -> list:
     if not rows:
         return []
 
-    # Verificar si las filas tienen acceso por clave o son tuplas
     if rows and hasattr(rows[0], 'keys'):
         return [dict(r) for r in rows]
 
-    # Mapeo manual seguro en caso de tuplas SQLite
     resultado = []
     for r in rows:
         resultado.append({
@@ -95,3 +91,90 @@ def obtener_reporte_ventas() -> dict:
         "producto_mas_vendido": str(df.groupby('producto')['cantidad'].sum().idxmax()),
         "cantidad_transacciones": int(len(df))
     }
+
+# ==========================================
+# NUEVAS FUNCIONES PARA EL GLOSARIO SEGURO
+# ==========================================
+
+def obtener_productos_mas_caros(limite: int = 5) -> list:
+    """Devuelve los productos con mayor precio de venta."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.nombre, p.precio_venta, p.stock_actual, pr.nombre AS proveedor
+        FROM productos p
+        LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
+        ORDER BY p.precio_venta DESC
+        LIMIT ?
+    """, (limite,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [{"nombre": r[0], "precio_venta": float(r[1]), "stock_actual": r[2], "proveedor": r[3] or "Sin Proveedor"} for r in rows]
+
+def obtener_productos_sin_stock() -> list:
+    """Devuelve los productos que tienen stock en 0."""
+    return obtener_productos_stock_bajo(umbral=0)
+
+def obtener_top_productos_vendidos(limite: int = 3) -> list:
+    """Devuelve los productos con mayor cantidad total unidades vendidas."""
+    conn = get_connection()
+    query = """
+        SELECT p.nombre, SUM(v.cantidad) as total_vendido
+        FROM ventas v
+        JOIN productos p ON v.producto_id = p.id
+        GROUP BY p.id, p.nombre
+        ORDER BY total_vendido DESC
+        LIMIT ?
+    """
+    df = pd.read_sql_query(query, conn, params=(limite,))
+    conn.close()
+    
+    if df.empty:
+        return []
+    
+    return [{"producto": row["nombre"], "unidades_vendidas": int(row["total_vendido"])} for _, row in df.iterrows()]
+
+def obtener_proveedor_mejor_calificado() -> dict:
+    """Devuelve el proveedor con la calificación de calidad más alta."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT nombre, contacto, telefono, email, calificacion_calidad
+        FROM proveedores
+        ORDER BY calificacion_calidad DESC, nombre ASC
+        LIMIT 1
+    """)
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return {"nombre": "Sin proveedores", "calificacion_calidad": 0}
+        
+    return {
+        "nombre": row[0],
+        "contacto": row[1] or "N/A",
+        "telefono": row[2] or "N/A",
+        "email": row[3] or "N/A",
+        "calificacion_calidad": row[4]
+    }
+
+def obtener_lista_proveedores() -> list:
+    """Devuelve todos los proveedores ordenados por calificación de calidad."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT nombre, contacto, telefono, email, calificacion_calidad
+        FROM proveedores
+        ORDER BY calificacion_calidad DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [{
+        "nombre": r[0],
+        "contacto": r[1] or "N/A",
+        "telefono": r[2] or "N/A",
+        "email": r[3] or "N/A",
+        "calificacion_calidad": r[4]
+    } for r in rows]
