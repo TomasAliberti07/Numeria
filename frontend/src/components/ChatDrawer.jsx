@@ -1,14 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Loader2, BookOpen, Sparkles } from 'lucide-react';
+import { X, Send, Loader2, BookOpen, Sparkles, FileText, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { descargarPDFReporte } from '../utils/pdfGenerator';
 import { 
   enviarMensajeNumerito, 
   obtenerGlosarioStockBajo, 
   obtenerGlosarioResumenInventario,
+  obtenerGlosarioProductosCaros,
+  obtenerGlosarioSinStock,
   obtenerGlosarioReporteVentas,
   obtenerGlosarioTopVentas,
-  obtenerGlosarioProveedorDestacado
+  obtenerGlosarioProveedorDestacado,
+  obtenerGlosarioListaProveedores
 } from '../api/chat';
 
 export const ChatDrawer = ({ isOpen, onClose }) => {
@@ -48,14 +52,12 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
 
     try {
       const data = await enviarMensajeNumerito(cleanInput);
-
       const botMsg = {
         id: Date.now() + 1,
         sender: 'bot',
         text: data.respuesta || 'Sin respuesta del servidor.',
       };
       setMessages((prev) => [...prev, botMsg]);
-
     } catch (error) {
       console.error('Error al conectar con Numerito:', error);
       const errorDetail =
@@ -82,7 +84,7 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
 
     try {
       const resultado = await fetchFunction();
-      let textoRespuesta = `### 📌 Resultado del Glosario (${tituloPregunta})\n\n`;
+      let textoRespuesta = `### 📌 Resultado (${tituloPregunta})\n\n`;
       
       if (Array.isArray(resultado)) {
         if (resultado.length === 0) {
@@ -106,6 +108,53 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
       setMessages((prev) => [...prev, { id: Date.now() + 1, sender: 'bot', text: textoRespuesta }]);
     } catch (error) {
       setMessages((prev) => [...prev, { id: Date.now() + 1, sender: 'bot', text: 'Error al consultar el glosario local.' }]);
+    } finally {
+      setIsThinking(false);
+      setShowGlosario(false);
+    }
+  };
+
+  const handlePdfClick = async (tipoReporte) => {
+    if (isThinking) return;
+
+    const userMsg = { id: Date.now(), sender: 'user', text: `Generar PDF de ${tipoReporte}` };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsThinking(true);
+
+    try {
+      let datos = [];
+      
+      if (tipoReporte === 'Ventas') {
+        datos = await obtenerGlosarioReporteVentas();
+        if (!Array.isArray(datos)) datos = [datos];
+      } else if (tipoReporte === 'Inventario') {
+        datos = await obtenerGlosarioStockBajo();
+      } else if (tipoReporte === 'Proveedores') {
+        datos = await obtenerGlosarioListaProveedores();
+      }
+
+      // Llamada correcta a la función exportada en pdfGenerator.js
+      descargarPDFReporte(tipoReporte, datos);
+
+      // Obtener fecha actual para mostrarla amigablemente en el chat
+      const hoy = new Date();
+      const fechaStr = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
+      const nombreArchivo = `${tipoReporte}-${fechaStr}.pdf`;
+
+      const botMsg = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: `¡Aquí está el documento que solicitaste!\n\n📄 **${nombreArchivo}** se ha generado y descargado correctamente.`,
+      };
+      setMessages((prev) => [...prev, botMsg]);
+
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      setMessages((prev) => [...prev, { 
+        id: Date.now() + 1, 
+        sender: 'bot', 
+        text: 'Ocurrió un error al obtener los datos para el PDF.' 
+      }]);
     } finally {
       setIsThinking(false);
       setShowGlosario(false);
@@ -142,43 +191,75 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Panel Desplegable del Glosario Limpio */}
+        {/* Panel Desplegable del Glosario (10 Preguntas + PDFs) */}
         {showGlosario && (
-          <div className="bg-slate-950/90 border-b border-slate-800 p-3 space-y-2 animate-fadeIn text-xs">
+          <div className="bg-slate-950/95 border-b border-slate-800 p-3 space-y-2 animate-fadeIn text-xs">
             <div className="flex items-center gap-1.5 text-cyan-400 font-semibold mb-1">
-              <Sparkles className="w-3.5 h-3.5" /> Glosario
+              <Sparkles className="w-3.5 h-3.5" /> Glosario y Reportes
             </div>
-            <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-1.5 max-h-60 overflow-y-auto pr-1">
+              
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Inventario y Stock</div>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Qué productos tienen stock bajo (< 5)?", obtenerGlosarioStockBajo); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                📦 1. Productos con stock bajo (&lt; 5 unidades)
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Cuál es el valor total de mi inventario actual?", obtenerGlosarioResumenInventario); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                📊 2. Valor total del inventario actual
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Cuáles son los 5 productos más caros de mi catálogo?", obtenerGlosarioProductosCaros); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                💎 3. Top 5 productos más caros
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("Muéstrame todos los productos registrados sin stock (Stock 0)", obtenerGlosarioSinStock); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                ❌ 4. Productos sin stock (0 unidades)
+              </button>
+
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Ventas y Facturación</div>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Cuál fue la facturación total histórica registrada?", obtenerGlosarioReporteVentas); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                💰 5. Facturación total histórica
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Cuáles son los 3 productos más vendidos?", obtenerGlosarioTopVentas); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                🔥 6. Top 3 productos más vendidos
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Cuántas transacciones de ventas se realizaron en total?", obtenerGlosarioReporteVentas); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                🧾 7. Cantidad de transacciones de ventas
+              </button>
+
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Proveedores</div>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Quién es el proveedor mejor calificado?", obtenerGlosarioProveedorDestacado); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                🤝 8. Proveedor mejor calificado
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("¿Qué proveedores tengo registrados y sus teléfonos de contacto?", obtenerGlosarioListaProveedores); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                📞 9. Agenda y teléfonos de proveedores
+              </button>
+              <button onClick={(e) => { e.preventDefault(); handleGlosarioClick("Lista los proveedores ordenados por su calificación de calidad", obtenerGlosarioListaProveedores); }} className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate">
+                ⭐ 10. Proveedores ordenados por calidad
+              </button>
+
+              <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mt-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Generación de Reportes PDF
+              </div>
               <button 
-                onClick={() => handleGlosarioClick("¿Qué productos tienen stock bajo?", obtenerGlosarioStockBajo)}
-                className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate"
+                onClick={(e) => { e.preventDefault(); handlePdfClick("Ventas"); }} 
+                className="text-left bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 p-2 rounded border border-cyan-800/60 transition flex items-center justify-between w-full"
               >
-                📦 Ver productos con stock bajo (&lt; 5)
+                <span>📄 Descargar PDF de Ventas</span>
+                <Download className="w-3.5 h-3.5" />
               </button>
               <button 
-                onClick={() => handleGlosarioClick("¿Cuál es el resumen de inventario?", obtenerGlosarioResumenInventario)}
-                className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate"
+                onClick={(e) => { e.preventDefault(); handlePdfClick("Inventario"); }} 
+                className="text-left bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 p-2 rounded border border-cyan-800/60 transition flex items-center justify-between w-full"
               >
-                📊 Resumen total de inventario y valor
+                <span>📄 Descargar PDF de Inventario</span>
+                <Download className="w-3.5 h-3.5" />
               </button>
               <button 
-                onClick={() => handleGlosarioClick("¿Cuál es el reporte general de ventas?", obtenerGlosarioReporteVentas)}
-                className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate"
+                onClick={(e) => { e.preventDefault(); handlePdfClick("Proveedores"); }} 
+                className="text-left bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 p-2 rounded border border-cyan-800/60 transition flex items-center justify-between w-full"
               >
-                💰 Facturación y transacciones totales
+                <span>📄 Descargar PDF de Proveedores</span>
+                <Download className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={() => handleGlosarioClick("¿Cuáles son los productos más vendidos?", obtenerGlosarioTopVentas)}
-                className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate"
-              >
-                🔥 Top productos más vendidos
-              </button>
-              <button 
-                onClick={() => handleGlosarioClick("¿Quién es el proveedor mejor calificado?", obtenerGlosarioProveedorDestacado)}
-                className="text-left bg-slate-900 hover:bg-slate-800 text-slate-300 p-2 rounded border border-slate-800 transition truncate"
-              >
-                🤝 Proveedor mejor calificado
-              </button>
+
             </div>
           </div>
         )}
