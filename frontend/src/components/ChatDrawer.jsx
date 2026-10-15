@@ -3,6 +3,7 @@ import { X, Send, Loader2, BookOpen, Sparkles, FileText, Download } from 'lucide
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { descargarPDFReporte } from '../utils/pdfGenerator';
+import { getProductos } from '../api/productos';
 import { 
   enviarMensajeNumerito, 
   obtenerGlosarioStockBajo, 
@@ -126,17 +127,24 @@ export const ChatDrawer = ({ isOpen, onClose }) => {
       
       if (tipoReporte === 'Ventas') {
         datos = await obtenerGlosarioReporteVentas();
-        if (!Array.isArray(datos)) datos = [datos];
       } else if (tipoReporte === 'Inventario') {
-        datos = await obtenerGlosarioStockBajo();
+        // Obtenemos la lista completa de productos desde api/productos.js
+        datos = await getProductos();
       } else if (tipoReporte === 'Proveedores') {
         datos = await obtenerGlosarioListaProveedores();
       }
 
-      // Llamada correcta a la función exportada en pdfGenerator.js
+      // Blindaje de datos: aseguramos que siempre sea un array plano para el generador
+      if (datos && !Array.isArray(datos)) {
+        datos = [datos];
+      }
+      if (!datos || datos.length === 0) {
+        datos = [{ aviso: "Sin registros disponibles para este reporte" }];
+      }
+
+      // Ejecutar la descarga del PDF
       descargarPDFReporte(tipoReporte, datos);
 
-      // Obtener fecha actual para mostrarla amigablemente en el chat
       const hoy = new Date();
       const fechaStr = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
       const nombreArchivo = `${tipoReporte}-${fechaStr}.pdf`;
