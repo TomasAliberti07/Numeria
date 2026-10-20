@@ -12,7 +12,6 @@ def obtener_resumen_stock() -> dict:
             COALESCE(SUM(p.stock_actual), 0) as unidades_totales,
             COALESCE(SUM(p.stock_actual * p.precio_compra), 0) as valor_total_inventario
         FROM productos p
-        WHERE p.activo = 1
     """)
     row = cursor.fetchone()
     conn.close()
@@ -30,7 +29,7 @@ def obtener_resumen_stock() -> dict:
     }
 
 def obtener_productos_stock_bajo(umbral: int = 5) -> list:
-    """Filtra y devuelve la lista de productos activos con stock crítico."""
+    """Filtra y devuelve la lista de productos con stock crítico."""
     try:
         umbral_int = int(umbral)
     except (ValueError, TypeError):
@@ -45,7 +44,7 @@ def obtener_productos_stock_bajo(umbral: int = 5) -> list:
             pr.nombre AS proveedor
         FROM productos p
         LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
-        WHERE p.stock_actual <= ? AND p.activo = 1
+        WHERE p.stock_actual <= ?
     """, (umbral_int,))
     
     rows = cursor.fetchall()
@@ -94,18 +93,17 @@ def obtener_reporte_ventas() -> dict:
     }
 
 # ==========================================
-# NUEVAS FUNCIONES PARA EL GLOSARIO SEGURO
+# FUNCIONES PARA EL GLOSARIO SEGURO
 # ==========================================
 
 def obtener_productos_mas_caros(limite: int = 5) -> list:
-    """Devuelve los productos activos con mayor precio de venta (ignora borrados lógicos)."""
+    """Devuelve los productos con mayor precio de venta."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT p.nombre, p.precio_venta, p.stock_actual, pr.nombre AS proveedor
         FROM productos p
         LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
-        WHERE p.activo = 1
         ORDER BY p.precio_venta DESC
         LIMIT ?
     """, (limite,))
@@ -115,7 +113,7 @@ def obtener_productos_mas_caros(limite: int = 5) -> list:
     return [{"nombre": r[0], "precio_venta": float(r[1]), "stock_actual": r[2], "proveedor": r[3] or "Sin Proveedor"} for r in rows]
 
 def obtener_productos_sin_stock() -> list:
-    """Devuelve los productos activos que tienen stock en 0."""
+    """Devuelve los productos que tienen stock en 0."""
     return obtener_productos_stock_bajo(umbral=0)
 
 def obtener_top_productos_vendidos(limite: int = 3) -> list:
