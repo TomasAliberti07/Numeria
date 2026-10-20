@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 export const descargarPDFReporte = (tipoReporte, datos) => {
   const doc = new jsPDF();
   
-  // 1. Obtener la fecha actual formateada (ej: 15-10-2026)
+  // 1. Obtener la fecha actual formateada (ej: 20-10-2026)
   const hoy = new Date();
   const fechaStr = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
   const nombreArchivo = `${tipoReporte}-${fechaStr}.pdf`;
@@ -30,7 +30,13 @@ export const descargarPDFReporte = (tipoReporte, datos) => {
 
   // 3. Procesamiento y construcción de la tabla estructurada
   if (Array.isArray(datos) && datos.length > 0) {
-    const rawKeys = Object.keys(datos[0]);
+    // Excluimos columnas técnicas que no deben verse en el reporte impreso
+    const columnasExcluidas = ['id', 'activo', 'proveedor_id', 'created_at', 'updated_at'];
+    
+    const rawKeys = Object.keys(datos[0]).filter(
+      key => !columnasExcluidas.includes(key.toLowerCase())
+    );
+
     const columnas = rawKeys.map(key => key.replace(/_/g, ' ').toUpperCase());
 
     const filas = datos.map(item => 
